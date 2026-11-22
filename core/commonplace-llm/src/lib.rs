@@ -40,7 +40,7 @@ pub fn system_info() -> String {
 
 /// On arm64 the fast Q4_0 kernels need DOTPROD and MATMUL_INT8.
 pub fn check_cpu_features() -> Result<()> {
-    if cfg!(target_arch = "aarch64") {
+    if cfg!(all(target_arch = "aarch64", not(target_vendor = "apple"))) {
         let info = system_info();
         for f in ["DOTPROD = 1", "MATMUL_INT8 = 1"] {
             ensure!(info.contains(f), "llama.cpp built without {f}: {info}");

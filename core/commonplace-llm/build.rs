@@ -28,6 +28,28 @@ fn main() {
         .define("GGML_OPENMP", "OFF")
         .define("GGML_BACKEND_DL", "OFF");
 
+    let apple = target.contains("apple");
+    let ios = target.contains("apple-ios");
+    // Start with the portable CPU backend. Metal changes numerics and needs its own iPhone release gate.
+    if apple {
+        cfg.define("GGML_METAL", "OFF")
+            .define("GGML_ACCELERATE", "OFF")
+            .define("GGML_CPU_KLEIDIAI", "OFF")
+            .define("GGML_NATIVE", "OFF");
+        if ios {
+            let simulator = target.ends_with("-sim") || target.starts_with("x86_64");
+            let sdk = if simulator { "iphonesimulator" } else { "iphoneos" };
+            let output = Command::new("xcrun").args(["--sdk", sdk, "--show-sdk-path"]).output().expect("xcrun SDK path");
+            assert!(output.status.success(), "Xcode's {sdk} SDK is required");
+            let sysroot = String::from_utf8(output.stdout).unwrap();
+            cfg.define("CMAKE_SYSTEM_NAME", "iOS")
+                .define("CMAKE_OSX_SYSROOT", sysroot.trim())
+                .define("CMAKE_OSX_ARCHITECTURES", if target.starts_with("aarch64") { "arm64" } else { "x86_64" })
+                .define("CMAKE_OSX_DEPLOYMENT_TARGET", env::var("IPHONEOS_DEPLOYMENT_TARGET").unwrap_or_else(|_| "17.0".into()))
+                .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY");
+        }
+    }
+
     if target.contains("android") {
         let ndk = env::var("ANDROID_NDK_HOME")
             .or_else(|_| env::var("ANDROID_NDK_ROOT"))
@@ -75,10 +97,12 @@ fn main() {
         println!("cargo:rustc-link-lib=c++_static");
         println!("cargo:rustc-link-lib=c++abi");
         println!("cargo:rustc-link-lib=log");
+    } else if apple {
+        println!("cargo:rustc-link-lib=dylib=c++");
     } else {
         println!("cargo:rustc-link-lib=dylib=stdc++");
     }
-    if target.contains("aarch64") {
+    if target.contains("aarch64") && !apple {
         // KleidiAI builds as its own static library (Android and the phone-exact Linux build).
         println!("cargo:rustc-link-lib=static=kleidiai");
     }
