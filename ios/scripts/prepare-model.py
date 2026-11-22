@@ -10,16 +10,20 @@ import hashlib
 import json
 import shutil
 import urllib.request
+import urllib.error
+import time
 from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parents[2]
 MINI_REPO = '0xPD33/MiniCPM5-2B-pureQ4_0-GGUF'
 MINI_REV = '76674264cc1a1b11939b0e6875571d4aae84cb18'
 MINI_NAME = 'MiniCPM5-2B-pureQ4_0.gguf'
+MINI_SIZE = 1421419744
 MINI_SHA = 'd998b9433fe6e9b20e0dde7780e6c435a8a9cd893538ea70cbf1e09ce28cd5ae'
 GEMMA_REPO = 'unsloth/gemma-4-E2B-it-GGUF'
 GEMMA_REV = '0314792d7f1f7e229411f620751375812bb9faf2'
 GEMMA_NAME = 'gemma-4-E2B-it-Q4_0.gguf'
+GEMMA_SIZE = 3041378400
 GEMMA_SHA = '31d3a3c630d4e71a7416498c42660dd3805066948acaec76a47e1ffac7010132'
 
 
@@ -29,6 +33,43 @@ def sha256(path):
         for data in iter(lambda: file.read(4 * 1024 * 1024), b''):
             digest.update(data)
     return digest.hexdigest()
+
+
+def download(url, model, expected_size, expected_sha):
+    """Resume bounded byte ranges; an interrupted transfer never becomes a valid model."""
+    partial = model.with_suffix(model.suffix + '.part')
+    if model.exists():
+        if model.stat().st_size == expected_size and sha256(model) == expected_sha:
+            return
+        if not partial.exists() and model.stat().st_size < expected_size:
+            model.replace(partial)
+        else:
+            raise SystemExit(f'invalid existing model: {model}; move it aside and retry')
+    while (partial.stat().st_size if partial.exists() else 0) < expected_size:
+        offset = partial.stat().st_size if partial.exists() else 0
+        end = min(expected_size, offset + 64 * 1024 * 1024) - 1
+        for attempt in range(5):
+            try:
+                request = urllib.request.Request(url, headers={'Range': f'bytes={offset}-{end}'})
+                with urllib.request.urlopen(request, timeout=120) as response:
+                    content_range = response.headers.get('Content-Range', '')
+                    if response.status != 206 or content_range != f'bytes {offset}-{end}/{expected_size}':
+                        raise OSError(f'unexpected range response: {response.status} {content_range}')
+                    # Buffer one bounded chunk so a short response cannot poison resume offsets.
+                    data = response.read(end - offset + 2)
+                    if len(data) != end - offset + 1:
+                        raise OSError(f'incomplete range: got {len(data)} bytes')
+                with partial.open('ab') as file:
+                    file.write(data)
+                print(f'{model.name}: {end + 1}/{expected_size} bytes', flush=True)
+                break
+            except (OSError, urllib.error.URLError) as error:
+                if attempt == 4:
+                    raise SystemExit(f'download interrupted; rerun to resume: {error}') from error
+                time.sleep(min(2 ** attempt, 8))
+    if partial.stat().st_size != expected_size or sha256(partial) != expected_sha:
+        raise SystemExit(f'download checksum mismatch; remove {partial} and retry')
+    partial.replace(model)
 
 
 def main():
@@ -62,18 +103,10 @@ def main():
     output = args.out or ROOT / 'data/library/packs' / pack_id
     output.mkdir(parents=True, exist_ok=True)
     model = output / name
-    if not args.gemma_file and not model.exists():
-        partial = model.with_suffix(model.suffix + '.part')
-        offset = partial.stat().st_size if partial.exists() else 0
-        request = urllib.request.Request(f'https://huggingface.co/{repo}/resolve/{revision}/{name}')
-        if offset:
-            request.add_header('Range', f'bytes={offset}-')
-        with urllib.request.urlopen(request, timeout=120) as response:
-            append = offset > 0 and response.status == 206
-            with partial.open('ab' if append else 'wb') as file:
-                shutil.copyfileobj(response, file, 4 * 1024 * 1024)
-        partial.replace(model)
-    elif args.gemma_file and args.gemma_file.resolve() != model.resolve():
+    if not args.gemma_file:
+        download(f'https://huggingface.co/{repo}/resolve/{revision}/{name}', model,
+                 MINI_SIZE if args.minicpm else GEMMA_SIZE, expected)
+    elif args.gemma_file.resolve() != model.resolve():
         shutil.copy2(args.gemma_file, model)
     with model.open('rb') as file:
         if file.read(4) != b'GGUF':

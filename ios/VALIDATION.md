@@ -15,9 +15,11 @@ Rust 1.95.0. Initial development build stamp: `e7f3370-dirty`.
   checksum and path traversal rejection, symlink escape and size-cap rejection).
 - Real Swift → UniFFI → Rust → ONNX smoke: passed (index a local document, retrieve its known passage,
   open the source, switch its pack and remove it). This is a Mac plumbing check, not answer-quality evidence.
+- iPhone simulator UI flows: passed on iOS 27.2 iPhone 18 Pro simulator (two tests: native Library/Settings navigation; offline question/history restore). iPad Air 13-inch simulator launched and onboarding rendered.
 - Real MiniCPM5-2B GGUF: loaded and generated a streamed, cited fixture answer on the Mac host;
   model SHA-256 `d998b9433fe6e9b20e0dde7780e6c435a8a9cd893538ea70cbf1e09ce28cd5ae`.
   This checks generation plumbing, not accuracy or iPhone performance.
+- Real Gemma 4 E2B GGUF: loaded and generated the same local fixture on the Mac host; SHA-256 `31d3a3c630d4e71a7416498c42660dd3805066948acaec76a47e1ffac7010132`.
 - Apple peak-RSS unit check: passed (native byte accounting).
 - Offline source/build regression check: passed. Build-only HTTP/TLS dependencies are absent from the
   selected normal iOS dependency graph. This does not create an OS network permission boundary.

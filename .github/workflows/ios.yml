@@ -28,7 +28,9 @@ jobs:
           swiftc ios/Commonplace/ModelPolicy.swift ios/Commonplace/ResearchRecord.swift ios/Tests/PolicyAndStorageTests.swift -o /tmp/policy-tests
           /tmp/policy-tests
       - name: Test exported evaluation provenance
-        run: python3 ios/Tests/test_eval_import.py
+        run: |
+          python3 ios/Tests/test_eval_import.py
+          python3 ios/Tests/test_model_download.py
       - name: Test the shared core and mounted-file safety
         env:
           MACOSX_DEPLOYMENT_TARGET: '14.0'

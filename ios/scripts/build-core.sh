@@ -22,6 +22,8 @@ mkdir -p ios/Generated ios/Frameworks ios/build/headers
 cp ios/Generated/commonplace_ffiFFI.h ios/build/headers/
 cp ios/Generated/commonplace_ffiFFI.modulemap ios/build/headers/module.modulemap
 python3 ios/scripts/fetch-runtime-notices.py
+# License extraction is offline and needs the target-specific crate archives first.
+(cd core && cargo fetch --locked --target aarch64-apple-ios)
 python3 scripts/licenses.py --ios --ort-dir ios/build/runtime-notices
 XCARGS=()
 for target in "${TARGETS[@]}"; do

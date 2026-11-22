@@ -189,7 +189,7 @@ struct OfflineWelcome: View {
                     Text("Download packs with your browser, then import them from Files. Begin with MiniCPM5-2B or a Gemma E2B GGUF pack. The Tensor G5 .litertlm pack is for Pixel phones.")
                     Text("Keep your sources").font(.headline)
                     Text("Answers can be wrong. Citations open the evidence; underlined text is unverified. Your history stays on this device and is excluded from iCloud backup.")
-                    Button("Open my library", action: proceed).buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
+                    Button("Open my library", action: proceed).foregroundStyle(.white).buttonStyle(.borderedProminent).controlSize(.large).frame(maxWidth: .infinity)
                 }.padding(24).frame(maxWidth: 650).frame(maxWidth: .infinity)
             }.background(PaperTheme.paper).foregroundStyle(PaperTheme.ink).interactiveDismissDisabled()
         }.tint(PaperTheme.rubric)

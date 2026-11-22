@@ -451,9 +451,11 @@ These are build and plumbing receipts, **not** phone performance or answer-quali
 |---|---|---|
 | iPhone arm64 Rust static library | Built and linked | CPU llama.cpp, static ONNX Runtime 1.28.0 |
 | Native Swift 6 iPhone app | Unsigned Debug build succeeded | Generic iPhoneOS target; no physical execution implied |
+| iPhone simulator UI flows | Passed | iOS 27.2 iPhone 18 Pro simulator; native Library/Settings navigation and local history restore; no phone performance claim |
 | Swift model admission/history checks | Passed | Available-memory admission; unsupported formats/Ling excluded; scope, citations and corrupt-file isolation |
 | Rust mounted-folder safety | 4 tests passed | No copy/source deletion; missing folder removal; checksum, path and symlink checks; size cap |
 | Swift → UniFFI → Rust → ONNX smoke | Passed | Real encoder indexing/retrieval, reading a known local source, switching/removing its pack; Mac host |
+| Gemma 4 E2B GGUF generation | Passed | Mac Swift/FFI smoke, verified SHA `31d3a3c630d4e71a7416498c42660dd3805066948acaec76a47e1ffac7010132`; streamed cited fixture answer; no accuracy or speed claim |
 | MiniCPM5-2B GGUF generation | Passed | Mac Swift/FFI smoke, real model SHA `d998b9433fe6e9b20e0dde7780e6c435a8a9cd893538ea70cbf1e09ce28cd5ae`; streamed cited fixture answer; no accuracy or speed claim |
 | Apple peak RSS | Unit check passed | getrusage byte-to-MiB accounting |
 | Offline contract regression | Passed | No app network/analytics API or network configuration; no HTTP/TLS client in the selected normal runtime graph |
