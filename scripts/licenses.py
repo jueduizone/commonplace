@@ -17,6 +17,13 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "android/app/src/main/assets/third_party_licenses.txt")
 TARGETS = ["aarch64-linux-android", "x86_64-linux-android"]
+# Apple runtime additions. Build-time TLS/download dependencies are not linked into the app.
+IOS_COMPONENTS = [
+    ("Gemma 4 E2B GGUF (optional iOS model pack)", "Apache-2.0", "Google; Unsloth conversion 0314792d7f1f7e229411f620751375812bb9faf2; pipeline/notices/gemma4-e2b-ios.txt"),
+    ("oslog 0.2.0", "MIT", "Steven Joruk; https://github.com/steven-joruk/oslog"),
+    ("ONNX Runtime 1.28.0 (ort-sys pinned Apple distribution)", "MIT", "Microsoft Corporation; https://github.com/microsoft/onnxruntime"),
+]
+
 # When a crate offers a choice (OR), the app uses the first of these that it offers.
 PREFERENCE = ["MIT", "Apache-2.0", "BSD-3-Clause", "BSD-2-Clause", "Zlib", "ISC", "MPL-2.0", "Unicode-3.0", "CC0-1.0", "Unlicense", "BSL-1.0"]
 NOTICE_NAMES = ("NOTICE",)
@@ -41,10 +48,10 @@ def elect(expr):
     return out
 
 
-def rust_crates(manifest, crate, targets, seen):
+def rust_crates(manifest, crate, targets, seen, extra=()):
     for target in targets:
         meta = json.loads(subprocess.check_output(
-            ["cargo", "metadata", "--format-version", "1", "--locked", "--offline", "--manifest-path", manifest, "--filter-platform", target],
+            ["cargo", "metadata", "--format-version", "1", "--locked", "--offline", "--manifest-path", manifest, "--filter-platform", target, *extra],
             text=True))
         pk = {p["id"]: p for p in meta["packages"]}
         nodes = {n["id"]: n for n in meta["resolve"]["nodes"]}
@@ -201,6 +208,70 @@ def license_texts(crates, used):
     return texts, sources
 
 
+def ios_main():
+    import argparse
+    ap = argparse.ArgumentParser(description="Generate Apple app notices from the locked dependency graph")
+    ap.add_argument("--ios", action="store_true")
+    ap.add_argument("--out", default=os.path.join(ROOT, "ios/Resources/ThirdPartyNotices.txt"))
+    ap.add_argument("--ort-dir", required=True, help="verified ort-sys Apple distribution directory, including LICENSE/NOTICE files")
+    args = ap.parse_args()
+    crates = rust_crates(os.path.join(ROOT, "core/Cargo.toml"), "commonplace-ffi", ["aarch64-apple-ios"], {},
+                         ("--no-default-features", "--features", "commonplace-ffi/ort-static,commonplace-ffi/ort-download"))
+    # cargo metadata resolves the whole workspace, which can include normal dependencies enabled only
+    # by another crate's dev/build features. Match the actual selected application graph as well.
+    tree = subprocess.check_output(["cargo", "tree", "--manifest-path", os.path.join(ROOT, "core/Cargo.toml"),
+        "--locked", "--offline", "-p", "commonplace-ffi", "--target", "aarch64-apple-ios", "-e", "normal",
+        "--prefix", "none", "--format", "{p}", "--no-default-features", "--features", "ort-static,ort-download"], text=True)
+    linked = set(re.findall(r"^(\S+) v(\S+)", tree, re.M))
+    packages = [crates[k] for k in sorted(crates) if k in linked]
+    lines, notices = crate_section(packages)
+    output = ["COMMONPLACE FOR iOS — OPEN-SOURCE NOTICES", read(os.path.join(ROOT, "LICENSE"))]
+    output += ["\n".join(component) for component in IOS_COMPONENTS]
+    output += lines
+    for package in packages:
+        directory = os.path.dirname(package["manifest_path"])
+        files = license_files(directory)
+        if not package.get("license"):
+            sys.exit(f"no license declared for {package['name']}; inspect before distributing")
+        output += [f"\n{package['name']} {package['version']} — {name}\n{read(os.path.join(directory, name))}" for name in files]
+    used = {license for package in packages for license in elect(package["license"])}
+    # Some published UniFFI crates omit LICENSE. The Android notices already carry the full
+    # canonical license texts reviewed for this exact workspace; reuse those texts unchanged.
+    canonical = read(os.path.join(ROOT, "android/app/src/main/assets/third_party_licenses.txt"))
+    texts = {}
+    separator = "-" * 72
+    for name in sorted(used | {"MIT", "Apache-2.0", "OFL-1.1"}):
+        marker = "\n" + separator + "\n" + name + "\n"
+        if marker in canonical:
+            body = canonical.split(marker, 1)[1].split(separator + "\n", 1)[1]
+            texts[name] = body.split("\n" + separator + "\n", 1)[0].strip()
+        else:
+            matching = [p for p in packages if name in elect(p["license"])]
+            files = [(os.path.join(os.path.dirname(p["manifest_path"]), f)) for p in matching
+                     for f in license_files(os.path.dirname(p["manifest_path"]))]
+            if not files:
+                sys.exit(f"no full license text found for {name}")
+            texts[name] = read(files[0])
+    output += [f"{name} full license text\n{text}" for name, text in sorted(texts.items())]
+    output += [f"\n{name} NOTICE\n{text}" for name, text in notices]
+    output += ["llama.cpp (MIT)\n" + read(os.path.join(ROOT, "third_party/llama.cpp/LICENSE")),
+               "JSON for Modern C++ (MIT)\n" + read(os.path.join(ROOT, "third_party/llama.cpp/licenses/LICENSE-jsonhpp")),
+               "Literata (OFL-1.1)\n" + read(os.path.join(ROOT, "third_party/literata/OFL.txt"))]
+    ort_files = [path for path in sorted(glob.glob(os.path.join(args.ort_dir, "**/*"), recursive=True))
+                 if os.path.isfile(path) and os.path.basename(path).upper().startswith(("LICENSE", "NOTICE", "THIRD_PARTY"))]
+    if not ort_files:
+        sys.exit("the ONNX Runtime distribution has no license notices; supply them before distributing")
+    output += [f"ONNX Runtime — {os.path.basename(path)}\n{read(path)}" for path in ort_files]
+    # Encoders are unchanged from Android. Keep their attribution and model-license text with the app.
+    output += ["Query encoder: MongoDB/mdbr-leaf-mt (Apache-2.0); MongoDB\n"
+               "Reranker: 0xPD33/ettin-reranker-17m-commonplace (Apache-2.0); 0xPD33 and the cross-encoder authors\n"
+               "Pinned revisions are in ios/scripts/fetch-encoders.py and docs/MODELS.md."]
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
+    with open(args.out, "w") as f:
+        f.write("\n\n".join(output))
+    print(f"{args.out}: {len(packages)} Rust dependencies plus native runtime and model notices")
+
+
 def main():
     ptts = os.environ.get("PTTS_SRC") or sys.exit("set PTTS_SRC to a checkout of gradium-ai/xn-ptts (see the top of this file)")
     seen = rust_crates(os.path.join(ROOT, "core/Cargo.toml"), "commonplace-ffi", TARGETS, {})
@@ -307,4 +378,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ios_main() if "--ios" in sys.argv else main()

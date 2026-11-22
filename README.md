@@ -274,6 +274,12 @@ core/target/release/commonplace --model data/models/llm/Ling-3.0-tiny-Q4_0.gguf 
 
 The command line reads packs from `data/library/packs/`. To install a pack or a bundle there, run `tar -xf <file>.tar -C data/library/packs`.
 
+## iOS development port
+
+The native SwiftUI port lives in [`ios/`](ios/README.md). It reuses the Rust core and pack format, starts
+with MiniCPM5-2B and Gemma E2B GGUF on the CPU, and has a separate physical-iPhone release checklist.
+It is a development port; unsigned builds and simulator checks are not a passed phone release gate.
+
 ## Repository
 
 | Path | Contents |

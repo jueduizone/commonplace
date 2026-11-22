@@ -8,8 +8,8 @@ edition = "2024"
 license = "Apache-2.0"
 
 [workspace.dependencies]
-commonplace-core = { path = "commonplace-core" }
-commonplace-llm = { path = "commonplace-llm" }
+commonplace-core = { path = "commonplace-core", default-features = false }
+commonplace-llm = { path = "commonplace-llm", default-features = false }
 anyhow = "1"
 thiserror = "2"
 serde = { version = "1", features = ["derive"] }
@@ -19,7 +19,7 @@ memmap2 = "0.9"
 zstd = "0.14"
 rusqlite = { version = "0.40", features = ["bundled"] }
 tantivy = "=0.26.2"
-ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "load-dynamic", "api-22"] }
+ort = { version = "=2.0.0-rc.13", default-features = false, features = ["std", "ndarray", "api-22"] }
 ndarray = "0.17"
 tokenizers = { version = "0.22", default-features = false, features = ["fancy-regex"] }
 safetensors = "0.6"

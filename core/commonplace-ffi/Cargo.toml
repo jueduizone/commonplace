@@ -5,12 +5,18 @@ edition.workspace = true
 license.workspace = true
 
 [lib]
-crate-type = ["cdylib", "lib"]
+crate-type = ["cdylib", "staticlib", "lib"]
 name = "commonplace_ffi"
 
 [[bin]]
 name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
+
+[features]
+default = ["ort-dynamic"]
+ort-dynamic = ["commonplace-core/ort-dynamic"]
+ort-static = ["commonplace-core/ort-static"]
+ort-download = ["commonplace-core/ort-download"]
 
 [dependencies]
 commonplace-core.workspace = true
@@ -23,3 +29,6 @@ uniffi = { version = "0.32", features = ["cli"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 android_logger = "0.15"
+
+[target.'cfg(target_vendor = "apple")'.dependencies]
+oslog = { version = "0.2", default-features = false }

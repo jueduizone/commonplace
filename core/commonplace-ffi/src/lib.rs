@@ -590,11 +590,13 @@ pub struct CommonplaceEngine {
     engine: Engine,
     cancel: Arc<AtomicBool>,
     data_dir: PathBuf,
+    model_mmap: Arc<AtomicBool>,
 }
 
+mod logging;
+
 fn logger_init() {
-    #[cfg(target_os = "android")]
-    android_logger::init_once(android_logger::Config::default().with_max_level(log::LevelFilter::Info).with_tag("commonplace"));
+    logging::init();
 }
 
 #[uniffi::export]
@@ -621,11 +623,13 @@ impl CommonplaceEngine {
         };
         let cpus: Vec<usize> = if opts.pin_big_cores { commonplace_llm::big_cores() } else { vec![] };
         let state_dir = data_dir.join("llm-state");
+        let model_mmap = Arc::new(AtomicBool::new(false));
+        let mmap_for_loader = model_mmap.clone();
         let loader: LlmLoader = Box::new(move |mp, threads| {
             let file = mp.file().ok_or_else(|| anyhow::anyhow!("model pack has no file"))?;
             let n_ctx = mp.manifest.model.as_ref().map(|m| m.n_ctx).unwrap_or(4096);
             let batch_threads = (cpus.len() as u32).max(threads);
-            let llm = LlamaBackend::load(&file, &LoadOptions { n_ctx, threads, batch_threads, cpus: cpus.clone(), in_ram: true, state_dir: Some(state_dir.clone()) })?;
+            let llm = LlamaBackend::load(&file, &LoadOptions { n_ctx, threads, batch_threads, cpus: cpus.clone(), in_ram: !mmap_for_loader.load(Ordering::Relaxed), state_dir: Some(state_dir.clone()) })?;
             Ok(Arc::new(llm) as Arc<dyn LlmBackend>)
         });
         let engine = Engine::new(cfg, Some(loader))?;
@@ -636,7 +640,7 @@ impl CommonplaceEngine {
             // int8 one did on 40 and ranks better (docs/BENCHMARKS.md).
             s.retrieval.fuse_keep = 24;
         }
-        Ok(Arc::new(Self { engine, cancel: Arc::new(AtomicBool::new(false)), data_dir }))
+        Ok(Arc::new(Self { engine, cancel: Arc::new(AtomicBool::new(false)), data_dir, model_mmap }))
     }
 
     pub fn library(&self) -> LibraryInfo {
@@ -720,6 +724,20 @@ impl CommonplaceEngine {
         commonplace_llm::reset_load_progress();
         loaded?;
         Ok(self.model_status())
+    }
+
+    /// Explicit pack selection, after the platform has checked its available-memory budget.
+    pub fn load_model_pack(&self, pack_id: String) -> R<ModelStatus> {
+        let loaded = self.engine.load_model_pack(&pack_id);
+        commonplace_llm::reset_load_progress();
+        loaded?;
+        Ok(self.model_status())
+    }
+
+    /// Controls the next load only. Defaults to resident weights, as on Android.
+    /// Experimental on iOS: compare physical footprint in Diagnostics before choosing a default.
+    pub fn set_model_mmap(&self, enabled: bool) {
+        self.model_mmap.store(enabled, Ordering::Relaxed);
     }
 
     /// The fraction of the weights that llama.cpp has read, from 0 to 1. Safe to poll during `load_model`.
@@ -871,7 +889,7 @@ impl CommonplaceEngine {
         let mut index: Option<import::PartIndex> = None;
         let mut tars: Vec<(String, OwnedFd, u64, Option<String>)> = Vec::new();
         for p in parts {
-            // SAFETY: Kotlin detached this fd and hands us ownership.
+            // SAFETY: the platform detached/duplicated this fd and hands us ownership.
             let fd = unsafe { OwnedFd::from_raw_fd(p.fd) };
             if p.name.ends_with(".pack.json") {
                 let mut s = String::new();
@@ -914,6 +932,52 @@ impl CommonplaceEngine {
         Ok(imported?.into_iter().map(|m| m.pack_id).collect())
     }
 
+    /// Mount an already-unpacked, user-authorized directory without copying its contents.
+    /// The Apple app keeps its security-scoped bookmark active while the engine uses this link.
+    pub fn mount_pack(&self, directory: String) -> R<String> {
+        let source = std::fs::canonicalize(directory).map_err(anyhow::Error::from)?;
+        let m = pack::Manifest::read(&source)?;
+        let id = &m.pack_id;
+        if id.is_empty() || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+            return Err(CpError::Failed { msg: "invalid pack id".into() });
+        }
+        if m.files.is_empty() {
+            return Err(CpError::Failed { msg: "the pack manifest lists no files".into() });
+        }
+        for file in &m.files {
+            let path = std::path::Path::new(&file.path);
+            if path.components().any(|c| !matches!(c, std::path::Component::Normal(_)))
+                || !std::fs::canonicalize(source.join(path)).map_err(anyhow::Error::from)?.starts_with(&source)
+            {
+                return Err(CpError::Failed { msg: "pack files must stay inside the selected folder".into() });
+            }
+        }
+        if let Some(model) = &m.model {
+            if !m.files.iter().any(|f| f.path == model.file) {
+                return Err(CpError::Failed { msg: "the model file is absent from the pack manifest".into() });
+            }
+        }
+        let lib = self.engine.library();
+        lib.check_compatible(&m)?;
+        if lib.total_bytes().saturating_add(m.size_bytes) > FOOTPRINT_CAP {
+            return Err(CpError::Failed { msg: "mounting this pack would exceed the 50 GB limit".into() });
+        }
+        let bad = import::verify(&source)?;
+        if !bad.is_empty() {
+            return Err(CpError::Failed { msg: format!("pack verification failed: {}", bad.join(", ")) });
+        }
+        let link = Library::packs_dir(&self.engine.cfg.library_dir).join(id);
+        if link.symlink_metadata().is_ok() {
+            return Err(CpError::Failed { msg: "this pack is already installed; remove it before mounting".into() });
+        }
+        std::os::unix::fs::symlink(&source, &link).map_err(anyhow::Error::from)?;
+        if let Err(e) = self.engine.reload_library() {
+            let _ = std::fs::remove_file(&link);
+            return Err(e.into());
+        }
+        Ok(m.pack_id)
+    }
+
     /// Index a document the user added (text per page, page 1 first) as the pack `doc-<hash>`. Returns the pack id.
     /// `on_progress(done, total)` counts embedded passages; `on_part_done` is not called. Fails with a message the
     /// UI can show for an empty document, one over 5,000 passages, or one that is already added.
@@ -925,6 +989,13 @@ impl CommonplaceEngine {
         let dir = Library::packs_dir(&self.engine.cfg.library_dir).join(&pack_id);
         if !dir.starts_with(Library::packs_dir(&self.engine.cfg.library_dir)) || pack_id.contains('/') || pack_id.starts_with('.') {
             return Err(CpError::Failed { msg: "invalid pack id".into() });
+        }
+        if dir.symlink_metadata().is_ok_and(|m| m.file_type().is_symlink()) {
+            self.engine.unload_model();
+            std::fs::remove_file(&dir).map_err(anyhow::Error::from)?;
+            Library::set_enabled(&self.engine.cfg.library_dir, &pack_id, true)?;
+            self.engine.reload_library()?;
+            return Ok(());
         }
         let m = pack::Manifest::read(&dir)?;
         if m.pack_type == PackType::Model
@@ -1021,5 +1092,83 @@ impl CommonplaceEngine {
             cpu_features_ok: check.is_ok(),
             cpu_features_error: check.err().map(|e| e.to_string()).unwrap_or_default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod mounted_pack_tests {
+    use super::*;
+    use std::sync::atomic::AtomicU64;
+
+    struct Fixture { root: PathBuf, source: PathBuf, engine: Arc<CommonplaceEngine> }
+    impl Fixture {
+        fn new() -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let root = std::env::temp_dir().join(format!("commonplace-mount-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+            let source = root.join("external/model-pack");
+            std::fs::create_dir_all(&source).unwrap();
+            std::fs::write(source.join("MiniCPM5-2B-test.gguf"), b"fixture: never loaded as a model").unwrap();
+            let (files, size_bytes) = import::file_entries(&source).unwrap();
+            let manifest = pack::Manifest {
+                format_version: 1, pack_id: "external-mini".into(), pack_type: PackType::Model, title: "Fixture".into(),
+                snapshot_date: "2026-11-23".into(), build_date: "2026-11-23".into(), replaces: vec![], license: "Apache-2.0".into(),
+                attribution: "Test fixture".into(), counts: None, embedder: None, tantivy_version: None, user_document: false,
+                model: Some(pack::ModelInfo { role: ModelRole::LlmSmall, file: "MiniCPM5-2B-test.gguf".into(), hf_repo: String::new(), revision: String::new(), n_ctx: 4096, profile: None }),
+                files, size_bytes,
+            };
+            std::fs::write(source.join("manifest.json"), serde_json::to_vec(&manifest).unwrap()).unwrap();
+            let engine = CommonplaceEngine::new(EngineOptions {
+                data_dir: root.join("app").to_string_lossy().into(), encoders_dir: root.join("missing-encoders").to_string_lossy().into(),
+                leaf_model: "none".into(), ettin_model: "none".into(), encoder_threads: 2, llm_threads: 2, pin_big_cores: false,
+            }).unwrap();
+            Self { root, source, engine }
+        }
+        fn link(&self) -> PathBuf { self.root.join("app/library/packs/external-mini") }
+        fn edit(&self, f: impl FnOnce(&mut pack::Manifest)) {
+            let mut m = pack::Manifest::read(&self.source).unwrap(); f(&mut m);
+            std::fs::write(self.source.join("manifest.json"), serde_json::to_vec(&m).unwrap()).unwrap();
+        }
+    }
+    impl Drop for Fixture { fn drop(&mut self) { let _ = std::fs::remove_dir_all(&self.root); } }
+
+    #[test]
+    fn mounting_and_removing_never_copies_or_deletes_originals() {
+        let f = Fixture::new();
+        assert_eq!(f.engine.mount_pack(f.source.to_string_lossy().into()).unwrap(), "external-mini");
+        assert!(f.link().symlink_metadata().unwrap().file_type().is_symlink());
+        assert_eq!(f.engine.library().models.len(), 1);
+        assert!(f.engine.mount_pack(f.source.to_string_lossy().into()).is_err());
+        f.engine.remove_pack("external-mini".into()).unwrap();
+        assert!(!f.link().exists());
+        assert!(f.source.join("MiniCPM5-2B-test.gguf").is_file());
+    }
+
+    #[test]
+    fn a_moved_external_folder_can_be_removed() {
+        let f = Fixture::new(); f.engine.mount_pack(f.source.to_string_lossy().into()).unwrap();
+        std::fs::rename(&f.source, f.source.with_extension("moved")).unwrap();
+        f.engine.remove_pack("external-mini".into()).unwrap();
+        assert!(f.link().symlink_metadata().is_err());
+    }
+
+    #[test]
+    fn reject_hash_mismatch_and_paths_outside_the_selected_directory() {
+        let f = Fixture::new();
+        std::fs::write(f.source.join("MiniCPM5-2B-test.gguf"), b"corrupt").unwrap();
+        assert!(f.engine.mount_pack(f.source.to_string_lossy().into()).is_err());
+        assert!(f.link().symlink_metadata().is_err());
+        f.edit(|m| m.files[0].path = "../model-pack/MiniCPM5-2B-test.gguf".into());
+        assert!(f.engine.mount_pack(f.source.to_string_lossy().into()).is_err());
+    }
+
+    #[test]
+    fn reject_symlink_escape_and_over_cap_manifests() {
+        let f = Fixture::new();
+        let path = f.source.join("MiniCPM5-2B-test.gguf");
+        std::fs::rename(&path, f.root.join("outside.gguf")).unwrap();
+        std::os::unix::fs::symlink(f.root.join("outside.gguf"), &path).unwrap();
+        assert!(f.engine.mount_pack(f.source.to_string_lossy().into()).is_err());
+        let f = Fixture::new(); f.edit(|m| m.size_bytes = FOOTPRINT_CAP + 1);
+        assert!(f.engine.mount_pack(f.source.to_string_lossy().into()).is_err());
     }
 }

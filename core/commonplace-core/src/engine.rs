@@ -414,9 +414,22 @@ impl Engine {
 
     /// Load the model pack with `role` through the configured loader, unloading the current one first.
     pub fn load_model(&self, role: ModelRole) -> Result<()> {
-        let loader = self.loader.as_ref().context("no model loader configured")?;
         let lib = self.library();
         let mp = lib.model(&role).with_context(|| format!("no {role:?} model installed"))?;
+        self.load_pack(mp, &lib.snapshot_date())
+    }
+
+    /// Load one explicitly selected answer-model pack. Platforms can apply their memory policy first.
+    pub fn load_model_pack(&self, pack_id: &str) -> Result<()> {
+        let lib = self.library();
+        let mp = lib.models.iter().find(|m| m.manifest.pack_id == pack_id).context("model pack not installed")?;
+        self.load_pack(mp, &lib.snapshot_date())
+    }
+
+    fn load_pack(&self, mp: &ModelPack, snapshot_date: &str) -> Result<()> {
+        let loader = self.loader.as_ref().context("no model loader configured")?;
+        let role = mp.role().context("model pack has no role")?.clone();
+        ensure!(matches!(role, ModelRole::LlmFast | ModelRole::LlmSmall), "not an answer model");
         *self.llm.write().unwrap() = None;
         let (threads, rewrite) = {
             let s = self.settings.read().unwrap();
@@ -424,7 +437,7 @@ impl Engine {
         };
         let llm = loader(mp, threads)?;
         self.set_profile(mp.profile());
-        Self::warm_up(llm.as_ref(), &lib.snapshot_date(), rewrite, self.profile().lean);
+        Self::warm_up(llm.as_ref(), snapshot_date, rewrite, self.profile().lean);
         *self.llm.write().unwrap() = Some((role, llm));
         Ok(())
     }

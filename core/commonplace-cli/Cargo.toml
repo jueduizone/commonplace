@@ -9,7 +9,7 @@ name = "commonplace"
 path = "src/main.rs"
 
 [dependencies]
-commonplace-core.workspace = true
+commonplace-core = { workspace = true, features = ["ort-dynamic"] }
 commonplace-llm.workspace = true
 anyhow.workspace = true
 serde.workspace = true

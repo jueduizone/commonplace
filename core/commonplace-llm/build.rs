@@ -34,6 +34,7 @@ fn main() {
     if apple {
         cfg.define("GGML_METAL", "OFF")
             .define("GGML_ACCELERATE", "OFF")
+            .define("GGML_BLAS", "OFF")
             .define("GGML_CPU_KLEIDIAI", "OFF")
             .define("GGML_NATIVE", "OFF");
         if ios {

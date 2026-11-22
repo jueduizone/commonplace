@@ -68,6 +68,8 @@ The phone never runs this model. It embeds questions with leaf-mt, which works w
 |---|---|---|
 | llama.cpp | tag `b12032` (git submodule `third_party/llama.cpp`), plus `patches/llama.cpp/` | The build applies the patches to a copy in `OUT_DIR`, so the submodule stays upstream. Android arm64 uses `GGML_CPU_ARM_ARCH=armv8.2-a+dotprod+i8mm+fp16` and KleidiAI. x86_64 uses explicit AVX2/FMA/F16C flags. |
 | ONNX Runtime | Android AAR `com.microsoft.onnxruntime:onnxruntime-android:1.30.0`; desktop `onnxruntime` 1.27.1 (nixpkgs) | Loaded at run time (`ort` crate, `load-dynamic`, C API level 22). |
+| ONNX Runtime (iOS) | 1.28.0 static Apple archive selected by locked `ort-sys` 2.0.0-rc.13 | Build-time URL/SHA-256 pins are in the crate's distribution manifest. The CPU EP is used; linking CoreML does not select it. `ios/scripts/fetch-runtime-notices.py` pins the matching official Microsoft wheel for legal notices. Android retains its existing dynamic runtime. |
+| oslog (Apple logging) | 0.2.0, MIT | Apple unified-log wrapper; no analytics or network backend. |
 | Moonshine Voice | Android AAR `ai.moonshine:moonshine-voice:0.1.5`; desktop test `moonshine-voice==0.1.5` (PyPI) | JNI + C++ runtime for the voice model. |
 | LiteRT-LM | `com.google.ai.edge.litertlm:litertlm-android:0.18.1` | Runs a `.litertlm` model pack. The file name picks the accelerator: `_Google_Tensor_` the NPU, `-gpu` the GPU, any other file the CPU. Speculative decoding is on for the NPU (Settings). If the pack cannot start, the app uses llama.cpp. |
 | Phonon runtime (`ptts-ffi`, arm64 only) | Built from `gradium-ai/xn-ptts` @ `31e4e9f80275e432b570e17f5ccbefa895eff109` (version 0.6.0). `android/app/src/main/vendorLibs/arm64-v8a/libptts_ffi.so` (7.3 MB), SHA-256 `aa6f06e9faed875451d519d365358a18f08268132bc9b8b6bda02915609aaddc`. | Build, from the checkout: `RUSTFLAGS="-C strip=symbols -C link-arg=-Wl,-z,max-page-size=16384 -C target-cpu=generic -C target-feature=+dotprod,+fp16" cargo ndk -t arm64-v8a build --release -p ptts-ffi`. The app calls it through JNA (`PhononTTS.kt`). There is no x86_64 build, so on the emulator the bundled voice says that it is not available. |
@@ -88,3 +90,14 @@ The phone never runs this model. It embeds questions with leaf-mt, which works w
 | `cross-encoder/ettin-reranker-32m-v1`, `-68m-v1` | Larger rerankers. `-68m` scored 0.486 at a card time of 3.9 s, and it is a desktop option (`--ettin-dir`). |
 | Pocket TTS by Kyutai through sherpa-onnx | The bundled voice of developer builds until 2026-11-02. See [Read aloud](#read-aloud). |
 | K2-Horizon-7B, TinyLettuce, EttinX-nli-xs | Considered only: a llama.cpp fork, no ONNX export, or no use in the app. |
+
+## iOS model packs
+
+The initial iOS app admits only MiniCPM5-2B and Gemma 4 E2B GGUF files. It uses CPU llama.cpp with
+Metal/BLAS disabled for a reproducible first gate, selects models using `os_proc_available_memory`,
+and leaves Ling disabled. `ios/scripts/prepare-model.py --minicpm` reuses the exact existing MiniCPM
+revision/hash above. `--gemma` uses `unsloth/gemma-4-E2B-it-GGUF` at
+`0314792d7f1f7e229411f620751375812bb9faf2`, file `gemma-4-E2B-it-Q4_0.gguf` (3,041,378,400 bytes),
+SHA-256 `31d3a3c630d4e71a7416498c42660dd3805066948acaec76a47e1ffac7010132`. The conversion's
+pinned metadata declares Apache-2.0. Alternative Gemma conversions require explicit provenance/hash; the pack
+notice is `pipeline/notices/gemma4-e2b-ios.txt`. No weights are uploaded by these scripts.

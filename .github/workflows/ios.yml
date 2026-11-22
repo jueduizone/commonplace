@@ -1,0 +1,43 @@
+name: ios
+
+on:
+  push:
+    paths: ['core/**', 'ios/**', 'patches/**', 'scripts/licenses.py', 'eval/import.py', '.github/workflows/ios.yml']
+  pull_request:
+    paths: ['core/**', 'ios/**', 'patches/**', 'scripts/licenses.py', 'eval/import.py', '.github/workflows/ios.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apple:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+      - name: Test model policy and local history
+        run: |
+          swiftc ios/Commonplace/ModelPolicy.swift ios/Commonplace/ResearchRecord.swift ios/Tests/PolicyAndStorageTests.swift -o /tmp/policy-tests
+          /tmp/policy-tests
+      - name: Test exported evaluation provenance
+        run: python3 ios/Tests/test_eval_import.py
+      - name: Test the shared core and mounted-file safety
+        env:
+          MACOSX_DEPLOYMENT_TARGET: '14.0'
+        run: cargo test --manifest-path core/Cargo.toml --locked -p commonplace-core -p commonplace-llm -p commonplace-ffi --lib --jobs 4
+      - name: Build static Rust core and pinned encoder assets
+        run: |
+          python3 ios/scripts/fetch-encoders.py
+          ios/scripts/build-core.sh aarch64-apple-ios
+      - name: Build unsigned iPhone app
+        run: xcodebuild -project ios/Commonplace.xcodeproj -scheme Commonplace -configuration Debug -destination 'generic/platform=iOS' -derivedDataPath ios/build/DerivedData CODE_SIGNING_ALLOWED=NO build
+      - name: Check the offline contract
+        run: python3 ios/scripts/check-offline.py --app ios/build/DerivedData/Build/Products/Debug-iphoneos/Commonplace.app

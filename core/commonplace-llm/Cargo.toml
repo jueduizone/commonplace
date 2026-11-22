@@ -5,8 +5,12 @@ edition.workspace = true
 license.workspace = true
 links = "llama"
 
+[features]
+default = ["ort-dynamic"]
+ort-dynamic = ["commonplace-core/ort-dynamic"]
+
 [dependencies]
-commonplace-core.workspace = true
+commonplace-core = { workspace = true, default-features = false }
 anyhow.workspace = true
 log.workspace = true
 

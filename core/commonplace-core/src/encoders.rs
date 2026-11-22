@@ -5,7 +5,9 @@ use anyhow::{Context, Result, anyhow, ensure};
 use ort::session::Session;
 use ort::session::builder::GraphOptimizationLevel;
 use ort::value::TensorRef;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+#[cfg(not(feature = "ort-static"))]
+use std::path::PathBuf;
 use std::sync::{Mutex, Once};
 use tokenizers::{PaddingParams, PaddingStrategy, Tokenizer, TruncationParams, TruncationStrategy};
 
@@ -16,16 +18,30 @@ const DOC_MAX_TOKENS: usize = 512;
 const DOC_BATCH: usize = 8;
 const RERANK_MAX_TOKENS: usize = 256;
 
+#[cfg(all(feature = "ort-static", feature = "ort-dynamic"))]
+compile_error!("ort-static and ort-dynamic are mutually exclusive; build the iOS FFI alone with --no-default-features --features ort-static");
+#[cfg(not(any(feature = "ort-static", feature = "ort-dynamic")))]
+compile_error!("select ort-dynamic or ort-static on the application entry point");
+
 static ORT_INIT: Once = Once::new();
 
-/// Load ONNX Runtime once. `dylib` overrides the default library name/path.
+/// Initialize ONNX Runtime once. The iOS static build never loads a library at runtime.
+/// Dynamic loading remains the default for Android and the desktop CLI.
 pub fn init_ort(dylib: Option<&Path>) -> Result<()> {
+    #[cfg(feature = "ort-static")]
+    {
+        ensure!(dylib.is_none(), "a library path is not supported by the statically linked ONNX Runtime");
+        ORT_INIT.call_once(|| { ort::init().with_name("commonplace").commit(); });
+        return Ok(());
+    }
+    #[cfg(not(feature = "ort-static"))]
+    {
     let mut err = None;
     ORT_INIT.call_once(|| {
         let path = dylib
             .map(Path::to_path_buf)
             .or_else(|| std::env::var_os("ORT_DYLIB_PATH").map(PathBuf::from))
-            .unwrap_or_else(|| PathBuf::from("libonnxruntime.so"));
+            .unwrap_or_else(|| PathBuf::from(if cfg!(target_vendor = "apple") { "libonnxruntime.dylib" } else { "libonnxruntime.so" }));
         match ort::init_from(&path) {
             Ok(b) => {
                 b.with_name("commonplace").commit();
@@ -36,6 +52,7 @@ pub fn init_ort(dylib: Option<&Path>) -> Result<()> {
     match err {
         Some(e) => Err(e),
         None => Ok(()),
+    }
     }
 }
 

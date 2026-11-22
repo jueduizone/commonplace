@@ -124,3 +124,12 @@ Accuracy and speed tests are separate. The eval sets measure accuracy, and `scri
 - `pairwise.py` compares two of our runs. It uses the judge's rubric, swaps A and B for every query and hides the run ids. It prints win / tie / loss, a two-sided sign test and the mean difference with a bootstrap 95% interval. Identical answers count as ties and cost nothing.
 - `evidence.py` asks Claude whether the evidence can answer the question (`full`, `partial` or `none`). `report.py` then splits lost queries into generator failures and retrieval failures.
 - `report.py --history <csv>` writes the row to another CSV, and `--out <file>` writes the report elsewhere. The report gives a bootstrap interval for each score ratio, the judge points per rubric item and the worst answers. With `--gate`, it lists what changed against the reference.
+
+## iOS device exports
+
+The iOS Diagnostics screen exports answer JSONL and a metadata sidecar. Import both with
+`import.py --metadata <sidecar> --require-physical` for a physical-device accuracy candidate.
+The importer preserves the build/binary/model hashes and hardware identity, refuses duplicate IDs,
+speed-mode exports, incomplete runs and mismatched counts, and rejects simulator metadata when
+`--require-physical` is requested. This validates provenance fields, not answer quality: run the
+judge, abstention checks, pairwise comparison and two-roll release gate as usual.

@@ -55,7 +55,20 @@ pub fn now_ms() -> u64 {
     std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-/// Peak resident set size (VmHWM) in MB; 0 where /proc is unavailable.
+/// Peak resident set size in MiB. Apple reports ru_maxrss in bytes; Linux /proc reports KiB.
+/// This is RSS, not Apple's physical footprint or its jetsam limit.
+#[cfg(target_vendor = "apple")]
+pub fn peak_rss_mb() -> f64 {
+    let mut usage = std::mem::MaybeUninit::<libc::rusage>::uninit();
+    // SAFETY: getrusage initializes the complete output on success, and the pointer is valid.
+    if unsafe { libc::getrusage(libc::RUSAGE_SELF, usage.as_mut_ptr()) } == 0 {
+        unsafe { usage.assume_init() }.ru_maxrss as f64 / (1024.0 * 1024.0)
+    } else {
+        0.0
+    }
+}
+
+#[cfg(not(target_vendor = "apple"))]
 pub fn peak_rss_mb() -> f64 {
     std::fs::read_to_string("/proc/self/status")
         .ok()
@@ -73,4 +86,13 @@ pub fn append_jsonl(path: &Path, rec: &QueryRecord) -> std::io::Result<()> {
     let mut f = std::fs::OpenOptions::new().create(true).append(true).open(path)?;
     let line = serde_json::to_string(rec).map_err(std::io::Error::other)?;
     writeln!(f, "{line}")
+}
+
+#[cfg(all(test, target_vendor = "apple"))]
+mod apple_memory_tests {
+    #[test]
+    fn peak_rss_uses_bytes_rather_than_linux_kib() {
+        let peak = super::peak_rss_mb();
+        assert!(peak > 0.0 && peak < 1024.0 * 1024.0, "invalid Apple RSS in MiB: {peak}");
+    }
 }

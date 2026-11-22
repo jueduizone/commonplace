@@ -1,0 +1,39 @@
+// !$*UTF8*$!
+{
+ archiveVersion = 1;
+ classes = {};
+ objectVersion = 77;
+ objects = {
+  A00000000000000000000001 = {isa = PBXProject; attributes = {LastUpgradeCheck = 2700;}; buildConfigurationList = A00000000000000000000002; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; knownRegions = (en, Base); mainGroup = A00000000000000000000003; productRefGroup = A00000000000000000000004; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000005);};
+  A00000000000000000000002 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000006, A00000000000000000000007); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+  A00000000000000000000003 = {isa = PBXGroup; children = (A00000000000000000000008, A00000000000000000000009, A0000000000000000000000A, A0000000000000000000000B, A00000000000000000000004); sourceTree = "<group>";};
+  A00000000000000000000004 = {isa = PBXGroup; children = (A0000000000000000000000C); name = Products; sourceTree = "<group>";};
+  A00000000000000000000005 = {isa = PBXNativeTarget; buildConfigurationList = A0000000000000000000000D; buildPhases = (A0000000000000000000000E, A0000000000000000000000F, A00000000000000000000010); buildRules = (); dependencies = (); fileSystemSynchronizedGroups = (A00000000000000000000008); name = Commonplace; productName = Commonplace; productReference = A0000000000000000000000C; productType = "com.apple.product-type.application";};
+  A00000000000000000000006 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0;}; name = Debug;};
+  A00000000000000000000007 = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; SDKROOT = iphoneos; IPHONEOS_DEPLOYMENT_TARGET = 17.0;}; name = Release;};
+  A00000000000000000000008 = {isa = PBXFileSystemSynchronizedRootGroup; path = Commonplace; sourceTree = "<group>";};
+  A00000000000000000000009 = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; name = commonplace_ffi.swift; path = Generated/commonplace_ffi.swift; sourceTree = "<group>";};
+  A0000000000000000000000A = {isa = PBXFileReference; lastKnownFileType = wrapper.xcframework; path = Frameworks/CommonplaceCore.xcframework; sourceTree = "<group>";};
+  A0000000000000000000000B = {isa = PBXGroup; children = (A00000000000000000000014, A00000000000000000000015, A00000000000000000000016, A00000000000000000000017, A00000000000000000000018); name = Resources; sourceTree = "<group>";};
+  A0000000000000000000000C = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Commonplace.app; sourceTree = BUILT_PRODUCTS_DIR;};
+  A0000000000000000000000D = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000011, A00000000000000000000012); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release;};
+  A0000000000000000000000E = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000013); runOnlyForDeploymentPostprocessing = 0;};
+  A0000000000000000000000F = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000019); runOnlyForDeploymentPostprocessing = 0;};
+  A00000000000000000000010 = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A0000000000000000000001A, A0000000000000000000001B, A0000000000000000000001C, A0000000000000000000001D, A0000000000000000000001E); runOnlyForDeploymentPostprocessing = 0;};
+  A00000000000000000000011 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ENABLE_DEBUG_DYLIB = NO; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Info.plist; PRODUCT_BUNDLE_IDENTIFIER = app.commonplace.ios; PRODUCT_NAME = Commonplace; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_OBJC_BRIDGING_HEADER = Commonplace/DeviceProbe.h; SWIFT_OPTIMIZATION_LEVEL = "-Onone"; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTS_MACCATALYST = NO; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)/Frameworks"); OTHER_LDFLAGS = ("$(inherited)", "-lc++", "-liconv", "-framework", Foundation, "-framework", CoreML);}; name = Debug;};
+  A00000000000000000000012 = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; ENABLE_DEBUG_DYLIB = NO; CODE_SIGN_STYLE = Automatic; CURRENT_PROJECT_VERSION = 1; MARKETING_VERSION = 0.1.0; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Info.plist; PRODUCT_BUNDLE_IDENTIFIER = app.commonplace.ios; PRODUCT_NAME = Commonplace; SWIFT_VERSION = 6.0; SWIFT_STRICT_CONCURRENCY = complete; SWIFT_OBJC_BRIDGING_HEADER = Commonplace/DeviceProbe.h; SWIFT_OPTIMIZATION_LEVEL = "-O"; TARGETED_DEVICE_FAMILY = "1,2"; SUPPORTS_MACCATALYST = NO; FRAMEWORK_SEARCH_PATHS = ("$(inherited)", "$(PROJECT_DIR)/Frameworks"); OTHER_LDFLAGS = ("$(inherited)", "-lc++", "-liconv", "-framework", Foundation, "-framework", CoreML);}; name = Release;};
+  A00000000000000000000013 = {isa = PBXBuildFile; fileRef = A00000000000000000000009;};
+  A00000000000000000000014 = {isa = PBXFileReference; lastKnownFileType = folder; name = Encoders; path = Resources/Encoders; sourceTree = "<group>";};
+  A00000000000000000000015 = {isa = PBXFileReference; lastKnownFileType = text; name = ThirdPartyNotices.txt; path = Resources/ThirdPartyNotices.txt; sourceTree = "<group>";};
+  A00000000000000000000016 = {isa = PBXFileReference; lastKnownFileType = file; name = Literata.ttf; path = Resources/Literata.ttf; sourceTree = "<group>";};
+  A00000000000000000000017 = {isa = PBXFileReference; lastKnownFileType = text; name = perf.jsonl; path = ../scripts/bench/perf.jsonl; sourceTree = "<group>";};
+  A00000000000000000000018 = {isa = PBXFileReference; lastKnownFileType = text.xml; name = PrivacyInfo.xcprivacy; path = PrivacyInfo.xcprivacy; sourceTree = "<group>";};
+  A00000000000000000000019 = {isa = PBXBuildFile; fileRef = A0000000000000000000000A;};
+  A0000000000000000000001A = {isa = PBXBuildFile; fileRef = A00000000000000000000014;};
+  A0000000000000000000001B = {isa = PBXBuildFile; fileRef = A00000000000000000000015;};
+  A0000000000000000000001C = {isa = PBXBuildFile; fileRef = A00000000000000000000016;};
+  A0000000000000000000001D = {isa = PBXBuildFile; fileRef = A00000000000000000000017;};
+  A0000000000000000000001E = {isa = PBXBuildFile; fileRef = A00000000000000000000018;};
+ };
+ rootObject = A00000000000000000000001;
+}

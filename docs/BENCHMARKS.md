@@ -440,3 +440,26 @@ Known weak spots that these experiments did not fix:
 - Gemma on the NPU on a hot phone (thermal headroom above 0.85). A long session is measured in [Long sessions and heat](#long-sessions-and-heat).
 - MiniCPM decode at depth 0 on a cool phone, with the candidate's llama.cpp.
 - The phone speed of patches 0005 to 0010 and 0013 alone.
+
+## iOS port bring-up (2026-11-23)
+
+Host: Apple M5 Pro, 64 GiB RAM, macOS arm64; Xcode 27.2 (27B52), iPhoneOS SDK 27.2,
+Rust 1.95.0. Initial development build: `e7f3370-dirty` on `codex/ios-port`.
+These are build and plumbing receipts, **not** phone performance or answer-quality measurements.
+
+| Check | Result | Scope |
+|---|---|---|
+| iPhone arm64 Rust static library | Built and linked | CPU llama.cpp, static ONNX Runtime 1.28.0 |
+| Native Swift 6 iPhone app | Unsigned Debug build succeeded | Generic iPhoneOS target; no physical execution implied |
+| Swift model admission/history checks | Passed | Available-memory admission; unsupported formats/Ling excluded; scope, citations and corrupt-file isolation |
+| Rust mounted-folder safety | 4 tests passed | No copy/source deletion; missing folder removal; checksum, path and symlink checks; size cap |
+| Swift → UniFFI → Rust → ONNX smoke | Passed | Real encoder indexing/retrieval, reading a known local source, switching/removing its pack; Mac host |
+| MiniCPM5-2B GGUF generation | Passed | Mac Swift/FFI smoke, real model SHA `d998b9433fe6e9b20e0dde7780e6c435a8a9cd893538ea70cbf1e09ce28cd5ae`; streamed cited fixture answer; no accuracy or speed claim |
+| Apple peak RSS | Unit check passed | getrusage byte-to-MiB accounting |
+| Offline contract regression | Passed | No app network/analytics API or network configuration; no HTTP/TLS client in the selected normal runtime graph |
+| Export/import provenance | 4 tests passed | Hardware/build/model metadata retained; simulator, speed, incomplete and duplicate-ID safeguards |
+
+The paired physical iPhone was unavailable. The author-requested 11 GB in-place Files test, model mmap
+physical-footprint comparison, background/lock/jetsam tests, cool-phone speed runs and two-roll physical-iPhone
+release gates remain unmeasured. Simulator numbers must not fill those gaps. The port is not released.
+See `ios/VALIDATION.md` and `ios/README.md` for the reproducible commands and hardware checklist.

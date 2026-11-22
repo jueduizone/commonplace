@@ -41,6 +41,23 @@
       sdk = "${android.androidsdk}/libexec/android-sdk";
     in
     {
+      devShells.aarch64-darwin.default = let
+        darwin = import nixpkgs { system = "aarch64-darwin"; overlays = [ rust-overlay.overlays.default ]; };
+        appleRust = darwin.rust-bin.stable.latest.default.override {
+          extensions = [ "rust-src" "rust-analyzer" ];
+          targets = [ "aarch64-apple-ios" "aarch64-apple-ios-sim" ];
+        };
+      in darwin.mkShell {
+        packages = with darwin; [ appleRust cmake ninja uv python312 git-lfs pkg-config ];
+        # Xcode is installed separately; an Apple SDK is not redistributed by this flake.
+        shellHook = ''
+          export CC=/usr/bin/clang
+          export CXX=/usr/bin/clang++
+          export LIBCLANG_PATH="$(/usr/bin/xcode-select -p)/Toolchains/XcodeDefault.xctoolchain/usr/lib"
+          export MACOSX_DEPLOYMENT_TARGET=14.0
+          export IPHONEOS_DEPLOYMENT_TARGET=17.0
+        '';
+      };
       devShells.${system}.default = pkgs.mkShell {
         packages = with pkgs; [
           rust

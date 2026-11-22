@@ -22,3 +22,11 @@ result
 *.keystore
 .env
 .env.*
+# iOS generated bindings, static libraries, build output and machine-specific Xcode state.
+/ios/Generated/
+/ios/Frameworks/
+/ios/build/
+/ios/Resources/Encoders/
+/ios/Resources/ThirdPartyNotices.txt
+**/xcuserdata/
+*.xcuserstate
