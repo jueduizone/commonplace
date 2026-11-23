@@ -7,6 +7,8 @@ from pathlib import Path
 import hashlib
 import json
 import urllib.request
+import urllib.error
+import time
 
 ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / 'ios/Resources/Encoders'
@@ -18,8 +20,18 @@ MODELS = [
 ]
 
 def fetch(url):
-    with urllib.request.urlopen(url, timeout=90) as response:
-        return response.read()
+    last = None
+    for attempt in range(6):
+        try:
+            with urllib.request.urlopen(url, timeout=90) as response:
+                return response.read()
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
+            last = error
+            if attempt == 5:
+                raise
+            # Hugging Face redirects occasionally return transient 5xx responses on CI runners.
+            time.sleep(min(2 ** attempt, 20))
+    raise last
 
 
 def main():
