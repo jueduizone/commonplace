@@ -31,6 +31,8 @@ def main():
     privacy = plistlib.loads((ROOT / 'ios/PrivacyInfo.xcprivacy').read_bytes())
     if privacy.get('NSPrivacyTracking') or privacy.get('NSPrivacyTrackingDomains') or privacy.get('NSPrivacyCollectedDataTypes'):
         failures.append('unexpected tracking or collection declaration')
+    # Populate a clean CI checkout's local crate cache before the offline graph query.
+    subprocess.run(['cargo', 'fetch', '--manifest-path', str(ROOT / 'core/Cargo.toml'), '--locked', '--target', 'aarch64-apple-ios'], check=True)
     result = subprocess.run(['cargo', 'tree', '--manifest-path', str(ROOT / 'core/Cargo.toml'), '--locked', '--offline',
         '-p', 'commonplace-ffi', '--target', 'aarch64-apple-ios', '--no-default-features', '--features',
         'ort-static,ort-download', '-e', 'normal', '--prefix', 'none', '--format', '{p}'], check=True, text=True, capture_output=True)
